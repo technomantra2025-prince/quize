@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Technomantra - Live Feed</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Rajdhani', 'sans-serif'],
+                        tech: ['Orbitron', 'sans-serif'],
+                    },
+                    colors: {
+                        cyber: {
+                            green: '#00ff9d',
+                            cyan: '#00f3ff',
+                            dark: '#050b14',
+                            glass: 'rgba(15, 23, 42, 0.7)'
+                        }
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'slide-down': 'slideDown 0.3s ease-out forwards',
+                        'heart-break': 'heartBreak 0.4s ease-out forwards',
+                    },
+                    keyframes: {
+                        slideDown: {
+                            '0%': { opacity: '0', transform: 'translateY(-10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        heartBreak: {
+                            '0%': { transform: 'scale(1)', opacity: '1', color: '#ef4444' },
+                            '50%': { transform: 'scale(1.3)', opacity: '0.5' },
+                            '100%': { transform: 'scale(0.8)', opacity: '0.3', color: '#334155' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #020617;
+            color: #f8fafc;
+            overflow: hidden; 
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(0, 243, 255, 0.03) 0%, transparent 50%),
+                linear-gradient(rgba(0, 255, 157, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 157, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 30px 30px, 30px 30px;
+            height: 100dvh; 
+            width: 100vw;
+        }
+
+        /* Scanline Overlay */
+        .scanlines::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 999;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(56, 189, 248, 0.15);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 243, 255, 0.05);
+        }
+
+        .input-cyber {
+            background: rgba(2, 6, 23, 0.8);
+            border: 2px solid #1e293b;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .input-cyber:focus {
+            border-color: #00ff9d;
+            box-shadow: 0 0 15px rgba(0, 255, 157, 0.3);
+            outline: none;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Z-Index Management */
+        #app-loader { z-index: 100; }
+        #name-screen { z-index: 90; }
+        #start-screen { z-index: 90; }
+        #game-screen { z-index: 50; }
+        #round-end-overlay { z-index: 60; }
+        #mark-overlay { z-index: 55; }
+        #result-overlay { z-100; }
+        #spectator-panel { z-200; }
+
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        
+        /* Heart Styles */
+        .heart-icon {
+            color: #ef4444; 
+            transition: all 0.3s ease;
+            filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.5));
+        }
+        .heart-lost {
+            color: #334155; 
+            filter: grayscale(100%);
+            opacity: 0.5;
+            transform: scale(0.9);
+        }
+    </style>
+</head>
+<body class="h-[100dvh] w-full flex flex-col items-center justify-center relative selection:bg-cyan-500 selection:text-white">
+
+    <div class="scanlines fixed inset-0 pointer-events-none z-50 h-full w-full"></div>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toast-container" class="fixed top-5 right-5 z-[300] flex flex-col gap-3 pointer-events-none max-w-[90vw]"></div>
+
+    <!-- Loading Spinner -->
+    <div id="app-loader" class="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center transition-opacity duration-500">
+        <div class="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <div class="text-cyan-400 font-tech tracking-widest text-lg animate-pulse">INITIALIZING SYSTEM...</div>
+    </div>
+
+    <!-- Mark Overlay -->
+    <div id="mark-overlay" class="fixed inset-0 z-55 flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
+        <div id="mark-symbol" class="text-9xl font-black transform -translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2 scale-0 shadow-2xl transition-transform duration-300"></div>
+    </div>
+
+    <!-- 1. NAME SCREEN -->
+    <div id="name-screen" class="hidden absolute inset-0 z-90 flex flex-col items-center justify-center bg-slate-950/95 text-center p-4">
+        <div class="mb-8">
+            <i class="fas fa-database text-5xl md:text-6xl text-cyan-400 mb-4 block filter drop-shadow-[0_0_15px_rgba(0,243,255,0.5)]"></i>
+            <h1 class="text-4xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 font-tech tracking-widest leading-tight">
+                TECHNOMANTRA
+            </h1>
+            <p class="text-slate-400 text-sm md:text-base mt-2">LIVE DATA FEED PROTOCOL</p>
+        </div>
+        
+        <div class="glass-panel p-6 md:p-8 rounded-2xl w-full max-w-md border-t-4 border-cyan-500">
+            <form id="name-form" class="space-y-6">
+                <div>
+                    <label class="block text-cyan-200 text-sm font-bold mb-2 uppercase tracking-wider">Identify Yourself</label>
+                    <input type="text" id="username" class="w-full input-cyber rounded-xl px-4 py-3 md:px-6 md:py-4 text-xl md:text-2xl text-center font-tech font-bold tracking-widest placeholder-slate-600" placeholder="CODENAME" required autocomplete="off" maxlength="12">
+                </div>
+                <button type="submit" class="group relative w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 md:py-4 rounded-xl text-lg md:text-xl transition-all duration-300 shadow-[0_0_20px_rgba(8,145,178,0.4)] overflow-hidden">
+                    <span class="relative z-10 flex items-center justify-center gap-2">
+                        ACCESS TERMINAL <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                    </span>
+                    <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. START SCREEN -->
+    <div id="start-screen" class="hidden absolute inset-0 z-90 flex flex-col items-center justify-center bg-slate-950/95 text-center p-4 overflow-y-auto">
+        <h2 class="text-3xl md:text-6xl font-bold mb-2 text-white font-tech">READY, <span id="display-name" class="text-cyan-400 uppercase"></span>?</h2>
+        <p class="text-slate-400 mb-8 text-lg md:text-xl font-rajdhani tracking-wider">Fetching live encrypted data streams.</p>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-5xl w-full mb-8 md:mb-12 px-2 md:px-4">
+            <div class="glass-panel p-3 md:p-6 rounded-xl border-l-4 border-emerald-500">
+                <i class="fas fa-stopwatch text-2xl md:text-4xl mb-2 md:mb-3 text-emerald-400"></i>
+                <div class="text-slate-200 font-bold text-sm md:text-lg">30s / Round</div>
+            </div>
+            <div class="glass-panel p-3 md:p-6 rounded-xl border-l-4 border-red-500">
+                <i class="fas fa-heart text-2xl md:text-4xl mb-2 md:mb-3 text-red-400"></i>
+                <div class="text-slate-200 font-bold text-sm md:text-lg">3 Lives</div>
+            </div>
+            <div class="glass-panel p-3 md:p-6 rounded-xl border-l-4 border-purple-500">
+                <i class="fas fa-wifi text-2xl md:text-4xl mb-2 md:mb-3 text-purple-400"></i>
+                <div class="text-slate-200 font-bold text-sm md:text-lg">Live DB</div>
+            </div>
+            <div class="glass-panel p-3 md:p-6 rounded-xl border-l-4 border-pink-500">
+                <i class="fas fa-microphone text-2xl md:text-4xl mb-2 md:mb-3 text-pink-400"></i>
+                <div class="text-slate-200 font-bold text-sm md:text-lg">Voice Input</div>
+            </div>
+        </div>
+
+        <button id="start-btn" class="px-8 md:px-16 py-4 md:py-6 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-black text-lg md:text-2xl rounded-full transition shadow-[0_0_40px_rgba(16,185,129,0.5)] animate-pulse-fast font-tech tracking-wider flex items-center gap-3">
+            <i class="fas fa-play"></i> INITIATE SEQUENCE
+        </button>
+    </div>
+
+    <!-- 3. GAME SCREEN -->
+    <div id="game-screen" class="hidden w-full h-[100dvh] max-w-7xl mx-auto flex flex-col p-2 md:p-6 relative z-50">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-2 md:mb-4 shrink-0 gap-2 md:gap-6">
+            <div class="flex gap-2 md:gap-6 items-center w-full">
+                <div class="glass-panel px-2 py-1 md:px-4 md:py-2 rounded-lg text-center min-w-[60px] md:min-w-[80px] border-b-2 border-cyan-500/50">
+                    <div class="text-[9px] md:text-[10px] text-cyan-200 uppercase font-bold tracking-widest">Q</div>
+                    <div id="q-progress" class="text-base md:text-xl font-black text-white font-tech">1 / 10</div>
+                </div>
+                <div class="glass-panel px-2 py-1 md:px-4 md:py-2 rounded-lg text-center min-w-[60px] md:min-w-[80px] border-b-2 border-emerald-500/50">
+                    <div class="text-[9px] md:text-[10px] text-emerald-200 uppercase font-bold tracking-widest">Score</div>
+                    <div id="current-score" class="text-base md:text-xl font-black text-emerald-400 font-tech">0</div>
+                </div>
+                <!-- HEARTS DISPLAY -->
+                <div class="glass-panel px-2 py-1 md:px-3 md:py-2 rounded-lg text-center min-w-[70px] md:min-w-[90px] border-b-2 border-red-500/50">
+                    <div class="text-[9px] md:text-[10px] text-red-200 uppercase font-bold tracking-widest">Lives</div>
+                    <div id="lives-container" class="text-base md:text-xl text-red-500 font-tech flex gap-1 justify-center mt-1">
+                        <i class="fas fa-heart heart-icon text-sm md:text-lg"></i>
+                        <i class="fas fa-heart heart-icon text-sm md:text-lg"></i>
+                        <i class="fas fa-heart heart-icon text-sm md:text-lg"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="relative flex items-center justify-center w-12 h-12 md:w-20 md:h-20 shrink-0">
+                <svg class="absolute inset-0 w-full h-full transform -rotate-90">
+                    <circle cx="50%" cy="50%" r="48%" stroke="rgba(255,255,255,0.1)" stroke-width="4" fill="none"/>
+                    <circle id="timer-ring" cx="50%" cy="50%" r="48%" stroke="#00ff9d" stroke-width="4" fill="none" stroke-dasharray="285" stroke-dashoffset="0" class="transition-all duration-1000 ease-linear"/>
+                </svg>
+                <div id="timer-display" class="text-xl md:text-3xl font-black font-tech text-white leading-none">30</div>
+            </div>
+        </div>
+
+        <!-- Main Content Area (Scrollable on mobile) -->
+        <div class="flex-grow flex flex-col justify-start items-center text-center gap-3 md:gap-6 relative z-10 min-h-0 overflow-y-auto custom-scroll w-full px-1">
+            
+            <!-- HINT AREA (Now the main focus) -->
+            <div class="w-full max-w-4xl flex flex-col gap-2 relative shrink-0 pb-4">
+                <div class="flex justify-between items-center px-2">
+                    <div class="flex items-center gap-2 text-cyan-400 text-xs md:text-sm">
+                        <i class="fas fa-terminal"></i>
+                        <span class="font-bold tracking-wider uppercase">INTEL DATA</span>
+                    </div>
+                    <div id="hint-stats" class="text-[10px] md:text-xs font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 md:px-3 md:py-1 rounded border border-slate-700">
+                        1/5
+                    </div>
+                </div>
+
+                <div class="glass-panel w-full rounded-xl border border-cyan-500/20 h-[180px] md:h-[200px] overflow-y-auto custom-scroll p-2 relative flex flex-col gap-2">
+                    <div id="hints-container" class="flex flex-col gap-2"></div>
+                    <div id="no-hints-msg" class="absolute inset-0 flex items-center justify-center text-slate-600 italic pointer-events-none text-xs md:text-sm">
+                        Decrypting data...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Footer (Fixed at bottom) -->
+        <div class="mt-2 grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 w-full max-w-5xl mx-auto items-end shrink-0">
+            <button id="hint-btn" class="md:col-span-4 bg-slate-800/80 hover:bg-slate-700 border border-slate-600 text-white font-bold py-3 rounded-xl transition text-sm md:text-base uppercase tracking-wider flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed h-12">
+                <i class="fas fa-plus-square text-yellow-400 group-hover:rotate-90 transition-transform duration-300 text-sm md:text-base"></i> 
+                <span class="hidden md:inline">Next Hint</span><span class="md:hidden">Hint</span>
+            </button>
+            
+            <form id="guess-form" class="md:col-span-8 flex gap-2 h-full w-full relative">
+                <div class="relative flex-grow">
+                    <input type="text" id="guess-input" autocomplete="off" autocapitalize="off" spellcheck="false"
+                        class="w-full h-full input-cyber rounded-xl px-3 py-3 md:px-4 md:py-3 pr-10 md:pr-12 text-base md:text-xl text-white placeholder-slate-600 text-center font-tech tracking-widest uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                        placeholder="ANSWER" disabled>
+                    
+                    <!-- Microphone Button -->
+                    <button type="button" id="mic-btn" class="hidden absolute right-3 md:right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-cyan-400 transition-colors focus:outline-none">
+                        <i class="fas fa-microphone text-lg md:text-xl"></i>
+                    </button>
+                </div>
+                <button type="submit" id="submit-btn" disabled
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 md:px-6 rounded-xl font-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-base md:text-lg uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center">
+                    <i class="fas fa-paper-plane text-sm md:text-base"></i>
+                </button>
+            </form>
+        </div>
+
+        <div id="round-end-overlay" class="hidden absolute inset-0 z-60 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center text-center p-6">
+            <div id="end-icon" class="text-6xl md:text-8xl mb-6 animate-bounce">🏆</div>
+            <div id="end-title" class="text-4xl md:text-7xl font-black mb-2 font-tech text-white">CORRECT!</div>
+            <div id="end-message" class="text-lg md:text-2xl text-slate-300 mb-6 md:mb-8 font-rajdhani font-semibold">System processing...</div>
+            
+            <div class="glass-panel px-6 md:px-8 py-3 md:py-4 rounded-full mb-8 md:mb-10 border border-emerald-500/50">
+                <div class="text-xs md:text-sm text-emerald-300 uppercase tracking-widest mb-1">Points Awarded</div>
+                <div id="end-points" class="text-3xl md:text-4xl font-black text-emerald-400 font-tech">+50</div>
+            </div>
+            
+            <button id="next-q-btn" class="px-8 md:px-12 py-4 md:py-5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-lg md:text-xl rounded-full transition shadow-[0_0_30px_rgba(16,185,129,0.4)] flex items-center gap-3 transform hover:scale-105">
+                NEXT PROTOCOL <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 4. FINAL RESULT OVERLAY -->
+    <div id="result-overlay" class="hidden fixed inset-0 z-100 bg-slate-950 text-white p-4 md:p-6 flex flex-col items-center justify-center overflow-y-auto">
+        <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
+        
+        <div class="relative z-10 text-center max-w-2xl w-full">
+            <h1 class="text-4xl md:text-8xl font-black mb-2 font-tech text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500">MISSION COMPLETE</h1>
+            <p class="text-slate-400 mb-8 md:mb-10 text-lg md:text-xl font-rajdhani tracking-wider">FINAL REPORT GENERATED</p>
+            
+            <div class="glass-panel p-6 md:p-10 rounded-3xl border border-white/10 shadow-2xl mb-8 md:mb-10 transform rotate-1 hover:rotate-0 transition-transform duration-500">
+                <div class="text-sm md:text-sm text-slate-400 uppercase tracking-[0.3em] font-bold mb-2">Total Score</div>
+                <div id="final-score-display" class="text-6xl md:text-9xl font-black text-white font-tech drop-shadow-[0_0_25px_rgba(255,255,255,0.3)]">0</div>
+                <div class="mt-4 text-emerald-400 font-bold text-base md:text-lg"><i class="fas fa-check-circle"></i> DATA UPLOADED TO LEADERBOARD</div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-4 justify-center">
+                <button id="play-again-btn" class="px-8 md:px-10 py-3 md:py-4 bg-white text-slate-900 hover:bg-slate-200 font-black rounded-full transition text-base md:text-xl uppercase tracking-wider flex items-center justify-center gap-2">
+                    <i class="fas fa-redo"></i> Reboot System
+                </button>
+                <button onclick="toggleSpectatorMode()" class="px-8 md:px-10 py-3 md:py-4 bg-transparent border border-slate-600 text-white hover:bg-slate-800 font-black rounded-full transition text-base md:text-xl uppercase tracking-wider flex items-center justify-center gap-2">
+                    <i class="fas fa-list-ol"></i> View Rankings
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. SPECTATOR PANEL -->
+    <button onclick="toggleSpectatorMode()" class="fixed bottom-4 md:bottom-6 right-4 md:right-6 z-200 bg-slate-800/80 hover:bg-slate-700 text-cyan-400 border border-slate-600 p-3 md:p-3 rounded-full shadow-lg transition-all hover:scale-110 group">
+        <i class="fas fa-chart-bar text-xl"></i>
+    </button>
+
+    <div id="spectator-panel" class="hidden fixed inset-0 z-200 bg-slate-950/98 backdrop-blur-xl text-white p-4 md:p-8 overflow-y-auto">
+        <div class="max-w-4xl mx-auto w-full">
+            <div class="flex justify-between items-center mb-6 md:mb-8 border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-2xl md:text-3xl font-black font-tech text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400">LIVE LEADERBOARD</h2>
+                    <p class="text-slate-400 text-xs md:text-sm mt-1">Real-time data stream from Supabase</p>
+                </div>
+                <button onclick="toggleSpectatorMode()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 md:px-4 py-2 rounded-lg border border-red-500/50 transition uppercase font-bold tracking-wider text-xs md:text-sm">
+                    <i class="fas fa-times mr-1 md:mr-2"></i> Close
+                </button>
+            </div>
+            
+            <div class="glass-panel rounded-2xl overflow-hidden border border-slate-700/50">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-900/80 text-slate-300 uppercase text-[10px] md:text-xs font-bold tracking-wider">
+                        <tr>
+                            <th class="p-3 md:p-6 text-center">Rank</th>
+                            <th class="p-3 md:p-6">Operative</th>
+                            <th class="p-3 md:p-6 text-right">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body" class="text-base md:text-lg font-rajdhani font-semibold"></tbody>
+                </table>
+            </div>
+            
+            <div class="mt-4 md:mt-6 flex items-center justify-center gap-2 text-slate-500 text-xs md:text-sm font-mono">
+                <i class="fas fa-circle-notch fa-spin text-cyan-500"></i> Updating stream every 3s
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            
+            const SUPABASE_URL = 'https://worcmjutlantjutpdsjq.supabase.co'; 
+            const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvcmNtanV0bGFudGp1dHBkc2pxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3ODczNzIsImV4cCI6MjA4NTM2MzM3Mn0.Od0wLqh0xGxGWiDA3SDHybClPb4SZanbHu6p0wm_KUU';
+            
+            // Fallback if DB is empty
+            const FALLBACK_QUESTIONS = [
+                { id: '1', question_text: "What does HTML stand for?", answer: "hyper text markup language", hints: ["It's the skeleton of web pages.", "T stands for Text.", "Markup Language.", "Standard for Web Docs.", "Tim Berners-Lee invented it."] },
+                { id: '2', question_text: "Which language is used for web styling?", answer: "css", hints: ["It makes things look pretty.", "Cascading Style Sheets.", "It works with HTML.", "Separates content from design.", "Describes how HTML is displayed."] },
+                { id: '3', question_text: "What is the brain of the computer?", answer: "cpu", hints: ["Central Processing Unit.", "It processes instructions.", "It's a chip on the motherboard.", "Performs calculations.", "Interprets commands."] },
+                { id: '4', question_text: "What does HTTP stand for?", answer: "hypertext transfer protocol", hints: ["The foundation of data communication.", "Hypertext Transfer Protocol.", "You see it before website URLs.", "Stateless protocol.", "Defines how messages are formatted."] },
+                { id: '5', question_text: "Which company makes the iPhone?", answer: "apple", hints: ["Founded by Steve Jobs.", "Logo is a fruit.", "Also makes Macbooks.", "Headquartered in Cupertino.", "iOS is their OS."] }
+            ];
+
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Speech Recognition Setup
+            let recognition = null;
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.lang = 'en-US';
+                recognition.interimResults = false;
+
+                recognition.onstart = function() {
+                    const micBtn = document.getElementById('mic-btn');
+                    micBtn.classList.remove('text-slate-400');
+                    micBtn.classList.add('text-red-500', 'animate-pulse');
+                    micBtn.innerHTML = '<i class="fas fa-microphone-lines text-xl"></i>'; 
+                };
+
+                recognition.onend = function() {
+                    const micBtn = document.getElementById('mic-btn');
+                    micBtn.classList.add('text-slate-400');
+                    micBtn.classList.remove('text-red-500', 'animate-pulse');
+                    micBtn.innerHTML = '<i class="fas fa-microphone text-xl"></i>';
+                };
+
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    const input = document.getElementById('guess-input');
+                    input.value = transcript;
+                };
+
+                recognition.onerror = function(event) {
+                    console.error("Speech Recognition Error", event.error);
+                    if (event.error === 'not-allowed') {
+                        showToast("Microphone permission denied.", "error");
+                    } else if (event.error === 'no-speech') {
+                        showToast("No speech detected.", "info");
+                    } else {
+                        showToast("Voice input error: " + event.error, "error");
+                    }
+                };
+
+                document.getElementById('mic-btn').classList.remove('hidden');
+            }
+
+            const state = {
+                userName: "",
+                userId: null,
+                currentQuestionIndex: 0,
+                currentQuestion: null,
+                hintsRevealed: 0,
+                livesLeft: 3,
+                timeLeft: 30,
+                timerInterval: null,
+                totalScore: 0,
+                isPlaying: false,
+                maxTime: 30,
+                maxRounds: 10
+            };
+
+            // Mic Button Event Listener
+            const micBtn = document.getElementById('mic-btn');
+            if(micBtn) {
+                micBtn.addEventListener('click', () => {
+                    if (!recognition) return;
+                    if (audioCtx.state === 'suspended') {
+                        audioCtx.resume().then(() => { startMicRecognition(); }).catch(err => showToast("Audio system error.", "error"));
+                    } else {
+                        startMicRecognition();
+                    }
+                });
+            }
+
+            function startMicRecognition() {
+                try {
+                    recognition.start();
+                } catch(e) {
+                    recognition.stop();
+                    setTimeout(() => { try { recognition.start(); } catch(e2) { showToast("Microphone busy.", "error"); } }, 200);
+                }
+            }
+
+            // --- AUDIO SYSTEM ---
+            function playSound(type) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                if (type === 'click') {
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+                    gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                    oscillator.start();
+                    oscillator.stop(audioCtx.currentTime + 0.05);
+                } else if (type === 'correct') {
+                    oscillator.type = 'triangle';
+                    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1);
+                    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                    oscillator.start();
+                    oscillator.stop(audioCtx.currentTime + 0.5);
+                } else if (type === 'wrong') {
+                    oscillator.type = 'sawtooth';
+                    oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+                    oscillator.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.3);
+                    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                    oscillator.start();
+                    oscillator.stop(audioCtx.currentTime + 0.3);
+                } else if (type === 'tick') {
+                    oscillator.type = 'square';
+                    oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime);
+                    gainNode.gain.setValueAtTime(0.02, audioCtx.currentTime);
+                    oscillator.start();
+                    oscillator.stop(audioCtx.currentTime + 0.03);
+                }
+            }
+
+            function showToast(message, type = 'info') {
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+                const colors = type === 'error' ? 'border-red-500 bg-red-900/80' : (type === 'success' ? 'border-emerald-500 bg-emerald-900/80' : 'border-cyan-500 bg-slate-800/90');
+                const icon = type === 'error' ? 'fa-exclamation-triangle text-red-400' : (type === 'success' ? 'fa-check-circle text-emerald-400' : 'fa-info-circle text-cyan-400');
+                toast.className = `flex items-center gap-3 px-4 py-3 rounded-lg border-l-4 text-white shadow-xl backdrop-blur-md animate-slide-down transform transition-all duration-300 ${colors}`;
+                toast.innerHTML = `<i class="fas ${icon}"></i> <span class="font-bold tracking-wide text-xs md:text-sm">${message}</span>`;
+                container.appendChild(toast);
+                playSound('click');
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateX(100%)';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+
+            // --- INITIALIZATION ---
+            document.getElementById('app-loader').style.opacity = '0';
+            setTimeout(() => document.getElementById('app-loader').remove(), 500);
+            document.getElementById('name-screen').classList.remove('hidden');
+
+            // --- GAME LOGIC ---
+
+            document.getElementById('name-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const nameInput = document.getElementById('username');
+                if(nameInput.value.trim()) {
+                    playSound('click');
+                    state.userName = nameInput.value.trim();
+                    document.getElementById('name-screen').classList.add('hidden');
+                    document.getElementById('start-screen').classList.remove('hidden');
+                    document.getElementById('display-name').innerText = state.userName;
+                    if ('speechSynthesis' in window) {
+                        const ut = new SpeechSynthesisUtterance(`Welcome ${state.userName}. Systems ready.`);
+                        window.speechSynthesis.speak(ut);
+                    }
+                    try {
+                        const { data, error } = await supabase.from('user_scores').upsert({ user_name: state.userName, final_score: 0, total_questions: 0, updated_at: new Date() }, { onConflict: 'user_name' }).select('id').single();
+                        if(!error && data) {
+                            state.userId = data.id;
+                        }
+                    } catch(err) { console.error(err); }
+                }
+            });
+
+            document.getElementById('start-btn').addEventListener('click', async () => {
+                playSound('click');
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('game-screen').classList.remove('hidden');
+                await startGameLoop();
+            });
+
+            async function startGameLoop() {
+                state.currentQuestionIndex = 0;
+                state.totalScore = 0;
+                state.isPlaying = true;
+                
+                loadQuestion();
+            }
+
+            // --- NEW LOGIC: FETCH & DELETE ---
+            async function fetchNextQuestion() {
+                // Try to fetch from Supabase and delete immediately
+                try {
+                    const { data, error } = await supabase
+                        .from('game_data')
+                        .select('*')
+                        .limit(1)
+                        .maybeSingle(); 
+
+                    if (data) {
+                        // LOGIC: DELETE THE ROW AFTER FETCHING
+                        console.log(`Fetched ID: ${data.id}. Deleting from DB...`);
+                        await supabase
+                            .from('game_data')
+                            .delete()
+                            .eq('id', data.id);
+                        
+                        console.log(`ID: ${data.id} deleted successfully.`);
+                        return data;
+                    } else {
+                        console.log("Supabase is empty or connection failed.");
+                    }
+                } catch (err) {
+                    console.error("Supabase Fetch Error:", err);
+                }
+
+                // Fallback to hardcoded questions if DB is empty
+                showToast("Database empty. Switching to backup drive.", "info");
+                const randomIdx = Math.floor(Math.random() * FALLBACK_QUESTIONS.length);
+                // Return a copy to avoid mutating the original fallback array accidentally
+                return { ...FALLBACK_QUESTIONS[randomIdx] };
+            }
+
+            function revealHint(hintText, index) {
+                const container = document.getElementById('hints-container');
+                const noHintsMsg = document.getElementById('no-hints-msg');
+                
+                if (noHintsMsg) noHintsMsg.style.display = 'none';
+
+                const hintCard = document.createElement('div');
+                hintCard.className = "glass-panel p-2 rounded-lg border-l-4 border-yellow-500 text-left animate-slide-down flex items-start gap-2";
+                hintCard.innerHTML = `
+                    <span class="text-yellow-500 font-bold font-mono text-xs md:text-sm mt-0.5 min-w-[20px]">#${index + 1}</span>
+                    <p class="text-cyan-100 italic text-sm md:text-base">${hintText}</p>
+                `;
+                
+                container.appendChild(hintCard);
+                
+                const scrollContainer = document.querySelector('.custom-scroll');
+                if(scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            }
+
+            function updateHintStats(totalHints) {
+                const remaining = totalHints - state.hintsRevealed;
+                const statsEl = document.getElementById('hint-stats');
+                statsEl.innerText = `${state.hintsRevealed}/${totalHints}`;
+                
+                if (remaining <= 0) {
+                    statsEl.classList.add('text-red-400', 'border-red-500');
+                    document.getElementById('hint-btn').disabled = true;
+                }
+            }
+
+            function updateHeartsDisplay() {
+                const container = document.getElementById('lives-container');
+                container.innerHTML = '';
+                for(let i = 0; i < 3; i++) {
+                    const icon = document.createElement('i');
+                    icon.className = `fas fa-heart heart-icon ${i < state.livesLeft ? '' : 'heart-lost'} text-sm md:text-lg`;
+                    if (i === state.livesLeft) {
+                        icon.classList.add('animate-heart-break');
+                    }
+                    container.appendChild(icon);
+                }
+            }
+
+            async function loadQuestion() {
+                if (state.currentQuestionIndex >= state.maxRounds) {
+                    endGame();
+                    return;
+                }
+                
+                // Show a brief loading state
+                document.getElementById('no-hints-msg').style.display = 'flex';
+                document.getElementById('no-hints-msg').innerText = "Establishing secure connection...";
+
+                // Fetch the next question (Async)
+                state.currentQuestion = await fetchNextQuestion();
+
+                state.hintsRevealed = 0;
+                state.livesLeft = 3;
+                state.timeLeft = state.maxTime;
+                
+                document.getElementById('round-end-overlay').classList.add('hidden');
+                document.getElementById('mark-overlay').classList.remove('active');
+                document.getElementById('mark-overlay').classList.add('opacity-0', 'pointer-events-none');
+                
+                document.getElementById('hints-container').innerHTML = '';
+                document.getElementById('no-hints-msg').innerText = "Decrypting data...";
+                document.getElementById('hint-btn').disabled = false;
+                document.getElementById('hint-stats').innerText = "0/0";
+                document.getElementById('hint-stats').classList.remove('text-red-400', 'border-red-500');
+
+                updateHeartsDisplay();
+
+                let hintsArray = state.currentQuestion.hints;
+                if (typeof hintsArray === 'string') {
+                    try { hintsArray = JSON.parse(hintsArray); } catch(e) { hintsArray = []; }
+                }
+                if (!Array.isArray(hintsArray)) hintsArray = [];
+
+                if (hintsArray.length > 0) {
+                    state.hintsRevealed = 1;
+                    revealHint(hintsArray[0], 0);
+                    updateHintStats(hintsArray.length);
+                    speakText(hintsArray[0]);
+                } else {
+                    updateHintStats(0);
+                }
+
+                updateScoreUI(); 
+                enableInput(true);
+                resetTimerVisuals();
+                startTimer();
+            }
+
+            function startTimer() {
+                clearInterval(state.timerInterval);
+                updateTimerDisplay();
+                const totalDash = 285; 
+                const timerRing = document.getElementById('timer-ring');
+                
+                state.timerInterval = setInterval(() => {
+                    state.timeLeft--;
+                    updateTimerDisplay();
+                    const offset = totalDash - (state.timeLeft / state.maxTime) * totalDash;
+                    timerRing.style.strokeDashoffset = offset;
+                    
+                    if(state.timeLeft <= 5) {
+                        timerRing.style.stroke = '#ef4444';
+                        playSound('tick');
+                        document.body.classList.add('animate-pulse');
+                    } else if (state.timeLeft <= 10) {
+                        timerRing.style.stroke = '#eab308';
+                    }
+
+                    if (state.timeLeft <= 0) {
+                        clearInterval(state.timerInterval);
+                        document.body.classList.remove('animate-pulse');
+                        handleQuestionEnd(false, true);
+                    }
+                }, 1000);
+            }
+
+            function resetTimerVisuals() {
+                const timerRing = document.getElementById('timer-ring');
+                timerRing.style.strokeDashoffset = 0;
+                timerRing.style.stroke = '#00ff9d';
+                document.body.classList.remove('animate-pulse');
+            }
+
+            document.getElementById('hint-btn').addEventListener('click', () => {
+                playSound('click');
+                let hintsArray = state.currentQuestion.hints;
+                if (typeof hintsArray === 'string') {
+                    try { hintsArray = JSON.parse(hintsArray); } catch(e) { hintsArray = []; }
+                }
+                
+                if (state.hintsRevealed < hintsArray.length) {
+                    const nextHintIndex = state.hintsRevealed;
+                    const hintText = hintsArray[nextHintIndex];
+                    
+                    state.hintsRevealed++;
+                    revealHint(hintText, nextHintIndex);
+                    updateHintStats(hintsArray.length);
+                    speakText(`Hint: ${hintText}`);
+                }
+            });
+
+            document.getElementById('guess-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const input = document.getElementById('guess-input');
+                const guess = input.value.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); 
+                const correctAnswer = state.currentQuestion.answer.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+                const isCorrect = guess === correctAnswer;
+
+                enableInput(false);
+                clearInterval(state.timerInterval);
+                document.body.classList.remove('animate-pulse');
+
+                showMarkOverlay(isCorrect);
+
+                setTimeout(() => {
+                    if (isCorrect) {
+                        let points = 5 - (state.hintsRevealed - 1);
+                        if (points < 1) points = 1;
+                        state.totalScore += points;
+                        playSound('correct');
+                        handleQuestionEnd(true, false, points);
+                    } else {
+                        playSound('wrong');
+
+                        state.livesLeft--;
+                        updateHeartsDisplay();
+
+                        if (state.livesLeft === 0) {
+                            speakText("Critical Failure. No lives remaining.");
+                            handleQuestionEnd(false, false);
+                        } else {
+                            speakText("Incorrect. Life lost.");
+                            showToast(`Wrong! ${state.livesLeft} lives left.`, "error");
+                            
+                            document.getElementById('mark-overlay').classList.remove('active');
+                            document.getElementById('mark-overlay').classList.add('opacity-0', 'pointer-events-none');
+                            
+                            enableInput(true);
+                            input.value = ''; 
+                            input.focus();
+                            startTimer();
+                        }
+                    }
+                }, 1200);
+            });
+
+            function handleQuestionEnd(wasCorrect, wasTimeUp, points = 0) {
+                document.getElementById('mark-overlay').classList.remove('active');
+                document.getElementById('mark-overlay').classList.add('opacity-0', 'pointer-events-none');
+
+                const overlay = document.getElementById('round-end-overlay');
+                const title = document.getElementById('end-title');
+                const msg = document.getElementById('end-message');
+                const pointsDisplay = document.getElementById('end-points');
+                const icon = document.getElementById('end-icon');
+
+                overlay.classList.remove('hidden');
+                
+                if (wasCorrect) {
+                    title.innerText = "CORRECT!";
+                    title.className = "text-4xl md:text-7xl font-black mb-2 font-tech text-emerald-400";
+                    msg.innerText = "Excellent work, operative.";
+                    pointsDisplay.innerText = `+${points} PTS`;
+                    icon.innerText = "💾";
+                } else {
+                    title.innerText = wasTimeUp ? "TIME EXPIRED" : "ACCESS DENIED";
+                    title.className = "text-4xl md:text-7xl font-black mb-2 font-tech text-red-500";
+                    msg.innerText = `The answer was: ${state.currentQuestion.answer.toUpperCase()}`;
+                    pointsDisplay.innerText = "+0 PTS";
+                    icon.innerText = wasTimeUp ? "⏰" : (state.livesLeft === 0 ? "💀" : "⛔");
+                }
+            }
+
+            document.getElementById('next-q-btn').addEventListener('click', () => {
+                playSound('click');
+                state.currentQuestionIndex++;
+                loadQuestion();
+            });
+
+            async function endGame() {
+                state.isPlaying = false;
+                clearInterval(state.timerInterval);
+                updateLiveScoreDB();
+
+                const overlay = document.getElementById('result-overlay');
+                document.getElementById('game-screen').classList.add('hidden');
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+
+                const scoreDisplay = document.getElementById('final-score-display');
+                let current = 0;
+                const target = state.totalScore;
+                const inc = Math.ceil(target / 50);
+                const timer = setInterval(() => {
+                    current += inc;
+                    if(current >= target) {
+                        current = target;
+                        clearInterval(timer);
+                        if(target > 0) playSound('correct');
+                    }
+                    scoreDisplay.textContent = current;
+                }, 20);
+                speakText(`Mission complete. Final score: ${state.totalScore}.`);
+            }
+
+            async function updateLiveScoreDB() {
+                if(!state.userId) return;
+                try {
+                    await supabase.from('user_scores').update({ 
+                        final_score: state.totalScore, 
+                        updated_at: new Date() 
+                    }).eq('id', state.userId);
+                } catch(e) { console.error("DB Update Fail", e); }
+            }
+
+            function updateScoreUI() {
+                document.getElementById('q-progress').textContent = `${state.currentQuestionIndex + 1} / ${state.maxRounds}`;
+                document.getElementById('current-score').textContent = state.totalScore;
+            }
+
+            function updateTimerDisplay() {
+                document.getElementById('timer-display').textContent = state.timeLeft;
+            }
+
+            function enableInput(enable) {
+                const input = document.getElementById('guess-input');
+                const btn = document.getElementById('submit-btn');
+                input.disabled = !enable;
+                btn.disabled = !enable;
+                if (enable) setTimeout(() => input.focus(), 100);
+            }
+
+            function showMarkOverlay(isCorrect) {
+                const overlay = document.getElementById('mark-overlay');
+                const symbol = document.getElementById('mark-symbol');
+                symbol.className = 'text-9xl font-black transform absolute top-1/2 left-1/2 shadow-2xl scale-0';
+                
+                if (isCorrect) {
+                    overlay.classList.remove('bg-red-900/30');
+                    overlay.classList.add('bg-emerald-900/30');
+                    symbol.classList.add('text-emerald-400', 'drop-shadow-[0_0_30px_rgba(52,211,153,0.8)]');
+                    symbol.textContent = '✓';
+                } else {
+                    overlay.classList.remove('bg-emerald-900/30');
+                    overlay.classList.add('bg-red-900/30');
+                    symbol.classList.add('text-red-500', 'drop-shadow-[0_0_30px_rgba(239,68,68,0.8)]');
+                    symbol.textContent = '✕';
+                }
+
+                overlay.classList.remove('opacity-0', 'pointer-events-none');
+                requestAnimationFrame(() => {
+                    symbol.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                    symbol.style.transform = 'translate(-50%, -50%) scale(1)';
+                });
+            }
+
+            function speakText(text) {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    const ut = new SpeechSynthesisUtterance(text);
+                    ut.rate = 1.1;
+                    window.speechSynthesis.speak(ut);
+                }
+            }
+
+            document.getElementById('play-again-btn').addEventListener('click', () => location.reload());
+
+            let adminInterval = null;
+            window.toggleSpectatorMode = function() {
+                const panel = document.getElementById('spectator-panel');
+                playSound('click');
+                if (panel.classList.contains('hidden')) {
+                    panel.classList.remove('hidden');
+                    fetchLiveScores();
+                    adminInterval = setInterval(fetchLiveScores, 3000);
+                } else {
+                    panel.classList.add('hidden');
+                    clearInterval(adminInterval);
+                }
+            };
+
+            async function fetchLiveScores() {
+                const tbody = document.getElementById('leaderboard-body');
+                try {
+                    const { data, error } = await supabase.from('user_scores').select('*').order('final_score', { ascending: false }).limit(10);
+                    if (error) throw error;
+                    tbody.innerHTML = '';
+                    if (!data || data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-slate-500 italic">Waiting for data...</td></tr>';
+                        return;
+                    }
+                    data.forEach((row, index) => {
+                        const rank = index + 1;
+                        let rankClass = "text-slate-400";
+                        let rankIcon = `#${rank}`;
+                        if(rank === 1) { rankClass = "text-yellow-400 font-bold text-xl md:text-2xl"; rankIcon = "🥇"; }
+                        else if(rank === 2) { rankClass = "text-slate-300 font-bold text-lg md:text-xl"; rankIcon = "🥈"; }
+                        else if(rank === 3) { rankClass = "text-orange-400 font-bold text-lg md:text-xl"; rankIcon = "🥉"; }
+
+                        const tr = document.createElement('tr');
+                        tr.className = "border-b border-slate-800 hover:bg-slate-800/30 transition-colors";
+                        tr.innerHTML = `
+                            <td class="p-3 md:p-4 text-center ${rankClass} text-base md:text-xl">${rankIcon}</td>
+                            <td class="p-3 md:p-4 text-left text-white font-medium text-sm md:text-base">${row.user_name}</td>
+                            <td class="p-3 md:p-4 text-right font-mono text-cyan-400 font-bold text-sm md:text-base">${row.final_score}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

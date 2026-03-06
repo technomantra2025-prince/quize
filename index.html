@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -370,17 +371,17 @@
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             
-            const SUPABASE_URL = 'https://worcmjutlantjutpdsjq.supabase.co'; 
-            const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvcmNtanV0bGFudGp1dHBkc2pxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3ODczNzIsImV4cCI6MjA4NTM2MzM3Mn0.Od0wLqh0xGxGWiDA3SDHybClPb4SZanbHu6p0wm_KUU';
+            const SUPABASE_URL = 'https://raulrfxcusecsfburklf.supabase.co'; 
+            const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhdWxyZnhjdXNlY3NmYnVya2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NjQ4MjAsImV4cCI6MjA4ODE0MDgyMH0.B_aEWhF339tkpXjM83vNSeDr8u1b4lGBONcbXRzQINI';
             
             // Fallback if DB is empty
-            const FALLBACK_QUESTIONS = [
-                { id: '1', question_text: "What does HTML stand for?", answer: "hyper text markup language", hints: ["It's the skeleton of web pages.", "T stands for Text.", "Markup Language.", "Standard for Web Docs.", "Tim Berners-Lee invented it."] },
-                { id: '2', question_text: "Which language is used for web styling?", answer: "css", hints: ["It makes things look pretty.", "Cascading Style Sheets.", "It works with HTML.", "Separates content from design.", "Describes how HTML is displayed."] },
-                { id: '3', question_text: "What is the brain of the computer?", answer: "cpu", hints: ["Central Processing Unit.", "It processes instructions.", "It's a chip on the motherboard.", "Performs calculations.", "Interprets commands."] },
-                { id: '4', question_text: "What does HTTP stand for?", answer: "hypertext transfer protocol", hints: ["The foundation of data communication.", "Hypertext Transfer Protocol.", "You see it before website URLs.", "Stateless protocol.", "Defines how messages are formatted."] },
-                { id: '5', question_text: "Which company makes the iPhone?", answer: "apple", hints: ["Founded by Steve Jobs.", "Logo is a fruit.", "Also makes Macbooks.", "Headquartered in Cupertino.", "iOS is their OS."] }
-            ];
+            // const FALLBACK_QUESTIONS = [
+            //     { id: '1', question_text: "What does HTML stand for?", answer: "hyper text markup language", hints: ["It's the skeleton of web pages.", "T stands for Text.", "Markup Language.", "Standard for Web Docs.", "Tim Berners-Lee invented it."] },
+            //     { id: '2', question_text: "Which language is used for web styling?", answer: "css", hints: ["It makes things look pretty.", "Cascading Style Sheets.", "It works with HTML.", "Separates content from design.", "Describes how HTML is displayed."] },
+            //     { id: '3', question_text: "What is the brain of the computer?", answer: "cpu", hints: ["Central Processing Unit.", "It processes instructions.", "It's a chip on the motherboard.", "Performs calculations.", "Interprets commands."] },
+            //     { id: '4', question_text: "What does HTTP stand for?", answer: "hypertext transfer protocol", hints: ["The foundation of data communication.", "Hypertext Transfer Protocol.", "You see it before website URLs.", "Stateless protocol.", "Defines how messages are formatted."] },
+            //     { id: '5', question_text: "Which company makes the iPhone?", answer: "apple", hints: ["Founded by Steve Jobs.", "Logo is a fruit.", "Also makes Macbooks.", "Headquartered in Cupertino.", "iOS is their OS."] }
+            // ];
 
             const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
